@@ -26,11 +26,13 @@ export async function POST(req: Request) {
     );
   }
 
-  await createSession(user.id);
+  const role = (user.role as "ADMIN" | "ENSEIGNANT" | "ETUDIANT") || "ETUDIANT";
+  await createSession(user.id, role);
 
   return NextResponse.json({
     id: user.id,
     name: user.name,
     email: user.email,
+    role: user.role,
   });
 }

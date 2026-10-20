@@ -4,6 +4,13 @@ import { cookies } from "next/headers";
 export const COOKIE_NAME = "session";
 const MAX_AGE = 60 * 60 * 24 * 7;
 
+export type UserRole = "ADMIN" | "ENSEIGNANT" | "ETUDIANT";
+
+export interface SessionPayload {
+  userId: number;
+  role?: UserRole;
+}
+
 const jwtSecret = process.env.JWT_SECRET;
 
 function getSecret() {
@@ -14,8 +21,8 @@ function getSecret() {
   return new TextEncoder().encode(jwtSecret);
 }
 
-export async function createSession(userId: number) {
-  const token = await new SignJWT({ userId })
+export async function createSession(userId: number, role?: UserRole) {
+  const token = await new SignJWT({ userId, role: role ?? "ETUDIANT" })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
@@ -31,7 +38,7 @@ export async function createSession(userId: number) {
   });
 }
 
-export async function getSession(): Promise<{ userId: number } | null> {
+export async function getSession(): Promise<SessionPayload | null> {
   const store = await cookies();
   const token = store.get(COOKIE_NAME)?.value;
 
@@ -41,7 +48,10 @@ export async function getSession(): Promise<{ userId: number } | null> {
 
   try {
     const { payload } = await jwtVerify(token, getSecret());
-    return { userId: payload.userId as number };
+    return {
+      userId: payload.userId as number,
+      role: (payload.role as UserRole) || "ETUDIANT",
+    };
   } catch {
     return null;
   }

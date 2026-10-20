@@ -12,5 +12,8 @@ model User {
   email     String   @unique
   name      String
   password  String
+  role      String   @default("ETUDIANT")
+  filiere   String?
+  notes     String?
   createdAt DateTime @default(now())
 }

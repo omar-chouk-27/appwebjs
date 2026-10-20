@@ -1,8 +1,13 @@
-import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { createSession } from "@/lib/session";
-import { loginSchema } from "@/lib/validation";
+import { z } from "zod";
+
+const loginSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Email invalide"),
+  password: z.string().min(1, "Mot de passe requis"),
+});
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
@@ -11,28 +16,49 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0].message },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
   const { email, password } = parsed.data;
-  const user = await prisma.user.findUnique({ where: { email } });
-  const ok = user ? await bcrypt.compare(password, user.password) : false;
 
-  if (!user || !ok) {
-    return NextResponse.json(
-      { error: "Identifiants invalides" },
-      { status: 401 },
-    );
+  // 1. Chercher dans User
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (user) {
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) {
+      return NextResponse.json({ error: "Identifiants invalides" }, { status: 401 });
+    }
+
+    await createSession(user.id, false);
+    return NextResponse.json({
+      id: user.id,
+      name: user.name,
+      surname: user.surname,
+      email: user.email,
+      role: user.role,
+      isAdmin: false,
+    });
   }
 
-  const role = (user.role as "ADMIN" | "ENSEIGNANT" | "ETUDIANT") || "ETUDIANT";
-  await createSession(user.id, role);
+  // 2. Chercher dans Admin
+  const admin = await prisma.admin.findUnique({ where: { email } });
+  if (admin) {
+    const ok = await bcrypt.compare(password, admin.password);
+    if (!ok) {
+      return NextResponse.json({ error: "Identifiants invalides" }, { status: 401 });
+    }
 
-  return NextResponse.json({
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-  });
+    await createSession(admin.id, true);
+    return NextResponse.json({
+      id: admin.id,
+      name: admin.name,
+      surname: admin.surname,
+      email: admin.email,
+      role: "admin",
+      isAdmin: true,
+    });
+  }
+
+  return NextResponse.json({ error: "Identifiants invalides" }, { status: 401 });
 }

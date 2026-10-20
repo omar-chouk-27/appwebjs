@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import LogoutButton from "@/components/LogoutButton";
-import StudentManager from "@/components/StudentManager";
+import TokenOptimizerDashboard from "@/components/TokenOptimizerDashboard";
 
 export default async function DashboardPage() {
   const session = await getSession();
@@ -11,67 +11,112 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
+  // Si c'est un administrateur
+  if (session.isAdmin) {
+    const admin = await prisma.admin.findUnique({
+      where: { id: session.userId },
+    });
+
+    if (!admin) redirect("/login");
+
+    const models = await prisma.model.findMany();
+    const sessions = await prisma.session.findMany({
+      include: { model: true },
+      orderBy: { time: "desc" },
+      take: 20,
+    });
+
+    return (
+      <main className="mx-auto min-h-screen w-full max-w-6xl px-6 py-10">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-slate-900">
+                Bonjour, {admin.name} {admin.surname}
+              </h1>
+              <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-800">
+                ADMINISTRATEUR
+              </span>
+            </div>
+            <p className="mt-1 text-sm text-slate-500">
+              {admin.email} • Espace d'administration Token Optimizer
+            </p>
+          </div>
+          <LogoutButton />
+        </div>
+
+        <TokenOptimizerDashboard
+          models={models}
+          initialSessions={sessions.map((s) => ({
+            ...s,
+            time: s.time.toISOString(),
+          }))}
+          currentUser={{
+            id: admin.id,
+            name: admin.name,
+            surname: admin.surname,
+            email: admin.email,
+            role: "admin",
+            isAdmin: true,
+            totalPrompts: 0,
+          }}
+        />
+      </main>
+    );
+  }
+
+  // Utilisateur standard
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      filiere: true,
-      notes: true,
-      createdAt: true,
-    },
   });
 
   if (!user) {
     redirect("/login");
   }
 
-  const userRole = (user.role as "ADMIN" | "ENSEIGNANT" | "ETUDIANT") || "ETUDIANT";
+  const models = await prisma.model.findMany();
+  const sessions = await prisma.session.findMany({
+    where: { userId: user.id },
+    include: { model: true },
+    orderBy: { time: "desc" },
+    take: 20,
+  });
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-5xl px-6 py-12">
-      {/* En-tête profil utilisateur */}
+    <main className="mx-auto min-h-screen w-full max-w-6xl px-6 py-10">
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-slate-900">
-              Bonjour, {user.name}
+              Bonjour, {user.name} {user.surname}
             </h1>
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-bold ${
-                userRole === "ADMIN"
-                  ? "bg-purple-100 text-purple-800"
-                  : userRole === "ENSEIGNANT"
-                  ? "bg-blue-100 text-blue-800"
-                  : "bg-emerald-100 text-emerald-800"
-              }`}
-            >
-              {userRole}
+            <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-800">
+              UTILISATEUR
             </span>
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            {user.email} • Membre depuis le{" "}
-            {user.createdAt.toLocaleDateString("fr-FR")}
+            {user.email} • {user.totalPrompts} prompts soumis
           </p>
-          {user.filiere && (
-            <p className="mt-1 text-xs font-medium text-slate-600">
-              Filière : <span className="text-slate-900">{user.filiere}</span>
-            </p>
-          )}
         </div>
-
         <LogoutButton />
       </div>
 
-      {/* Module de gestion des étudiants adapté aux rôles (TP2) */}
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <StudentManager
-          currentUserRole={userRole}
-          currentUserId={user.id}
-        />
-      </div>
+      <TokenOptimizerDashboard
+        models={models}
+        initialSessions={sessions.map((s) => ({
+          ...s,
+          time: s.time.toISOString(),
+        }))}
+        currentUser={{
+          id: user.id,
+          name: user.name,
+          surname: user.surname,
+          email: user.email,
+          role: user.role,
+          isAdmin: false,
+          totalPrompts: user.totalPrompts,
+        }}
+      />
     </main>
   );
 }

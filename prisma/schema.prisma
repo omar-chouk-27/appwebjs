@@ -7,13 +7,56 @@ datasource db {
   provider = "sqlite"
 }
 
-model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
+model Admin {
+  id        String   @id @default(uuid())
   name      String
+  surname   String
+  email     String   @unique
   password  String
-  role      String   @default("ETUDIANT")
-  filiere   String?
-  notes     String?
   createdAt DateTime @default(now())
+
+  users    User[]
+  sessions Session[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  surname      String
+  email        String   @unique
+  password     String
+  role         String   @default("user")
+  totalPrompts Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  adminId String?
+  admin   Admin?  @relation(fields: [adminId], references: [id])
+
+  sessions Session[]
+}
+
+model Model {
+  id       String @id @default(uuid())
+  name     String @unique
+  provider String
+
+  sessions Session[]
+}
+
+model Session {
+  id          String   @id @default(uuid())
+  raw_prompt  String
+  opt_prompt  String
+  language    String   @default("English")
+  time        DateTime @default(now())
+  tokensSaved Int      @default(0)
+
+  modelId String
+  model   Model  @relation(fields: [modelId], references: [id])
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  adminId String?
+  admin   Admin?  @relation(fields: [adminId], references: [id])
 }

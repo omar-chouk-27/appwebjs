@@ -1,15 +1,9 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
+import { prisma } from "./prisma";
 
 export const COOKIE_NAME = "session";
 const MAX_AGE = 60 * 60 * 24 * 7;
-
-export type UserRole = "ADMIN" | "ENSEIGNANT" | "ETUDIANT";
-
-export interface SessionPayload {
-  userId: number;
-  role?: UserRole;
-}
 
 const jwtSecret = process.env.JWT_SECRET;
 
@@ -21,8 +15,13 @@ function getSecret() {
   return new TextEncoder().encode(jwtSecret);
 }
 
-export async function createSession(userId: number, role?: UserRole) {
-  const token = await new SignJWT({ userId, role: role ?? "ETUDIANT" })
+export interface SessionPayload {
+  userId: string;
+  isAdmin?: boolean;
+}
+
+export async function createSession(userId: string, isAdmin: boolean = false) {
+  const token = await new SignJWT({ userId, isAdmin })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
@@ -36,6 +35,8 @@ export async function createSession(userId: number, role?: UserRole) {
     path: "/",
     maxAge: MAX_AGE,
   });
+
+  return token;
 }
 
 export async function getSession(): Promise<SessionPayload | null> {
@@ -49,8 +50,8 @@ export async function getSession(): Promise<SessionPayload | null> {
   try {
     const { payload } = await jwtVerify(token, getSecret());
     return {
-      userId: payload.userId as number,
-      role: (payload.role as UserRole) || "ETUDIANT",
+      userId: payload.userId as string,
+      isAdmin: Boolean(payload.isAdmin),
     };
   } catch {
     return null;
@@ -60,4 +61,11 @@ export async function getSession(): Promise<SessionPayload | null> {
 export async function destroySession() {
   const store = await cookies();
   store.delete(COOKIE_NAME);
+}
+
+export async function requireAdmin() {
+  const session = await getSession();
+  if (!session || !session.isAdmin) return null;
+  const admin = await prisma.admin.findUnique({ where: { id: session.userId } });
+  return admin;
 }

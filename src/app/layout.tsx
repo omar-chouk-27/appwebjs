@@ -13,17 +13,24 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TP Authentification",
-  description: "Application d'authentification Next.js, Prisma et SQLite",
+  title: "TokenOpt — Intelligent LLM Prompt & Token Optimizer",
+  description:
+    "Plateforme de réduction de tokens pour modèles LLM (GPT-4o, Claude 3.5, Gemini). Réduisez jusqu'à 60% le coût et la latence de vos requêtes d'IA.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html
       lang="fr"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-slate-50 text-slate-900">{children}</body>
+      <body className="min-h-full bg-slate-950 font-sans text-slate-100 selection:bg-indigo-500 selection:text-white">
+        {children}
+      </body>
     </html>
   );
 }

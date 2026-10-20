@@ -43,6 +43,9 @@ export default function TokenOptimizerDashboard({
   const [rawPrompt, setRawPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState<"optimizer" | "portfolio" | "admin">("optimizer");
+  const [copied, setCopied] = useState(false);
+
   const [lastResult, setLastResult] = useState<{
     opt_prompt: string;
     tokensSaved: number;
@@ -51,7 +54,7 @@ export default function TokenOptimizerDashboard({
     optTokensEstimate: number;
   } | null>(null);
 
-  // Options d'optimisation (Checklist du projet)
+  // Options du moteur d'optimisation
   const [options, setOptions] = useState({
     replaceUuids: true,
     shortenUrls: true,
@@ -98,249 +101,386 @@ export default function TokenOptimizerDashboard({
     }
   }
 
+  function handleCopy(text: string) {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   const totalTokensSaved = sessions.reduce((acc, s) => acc + (s.tokensSaved || 0), 0);
+  const avgSavings =
+    sessions.length > 0
+      ? Math.round(totalTokensSaved / sessions.length)
+      : 0;
 
   return (
     <div className="space-y-8">
-      {/* Statistiques Rapides */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-            Sessions d'optimisation
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-lg backdrop-blur-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+            Sessions Réalisées
           </p>
-          <p className="mt-2 text-3xl font-bold text-slate-900">{sessions.length}</p>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold text-white">{sessions.length}</span>
+            <span className="text-xs text-slate-500">requêtes</span>
+          </div>
         </div>
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wider text-emerald-800">
-            Total Tokens Économisés
+
+        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-5 shadow-lg backdrop-blur-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+            Tokens Économisés
           </p>
-          <p className="mt-2 text-3xl font-bold text-emerald-700">
-            ~{totalTokensSaved.toLocaleString()}
-          </p>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold text-emerald-300">
+              +{totalTokensSaved.toLocaleString()}
+            </span>
+            <span className="text-xs text-emerald-400/80">tokens</span>
+          </div>
         </div>
-        <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wider text-indigo-800">
-            Statut du compte
+
+        <div className="rounded-2xl border border-cyan-500/30 bg-cyan-950/20 p-5 shadow-lg backdrop-blur-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-cyan-400">
+            Gain Moyen / Requête
           </p>
-          <p className="mt-2 text-xl font-bold text-indigo-900">
-            {currentUser.isAdmin ? "Administrateur" : "Utilisateur"}
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold text-cyan-300">~{avgSavings}</span>
+            <span className="text-xs text-cyan-400/80">tokens / prompt</span>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-indigo-500/30 bg-indigo-950/20 p-5 shadow-lg backdrop-blur-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-indigo-400">
+            Économie Estimée ($)
           </p>
-          <p className="text-xs text-indigo-600 mt-1">{currentUser.email}</p>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold text-indigo-300">
+              ${((totalTokensSaved / 1000) * 0.005).toFixed(3)}
+            </span>
+            <span className="text-xs text-indigo-400/80">USD</span>
+          </div>
         </div>
       </div>
 
-      {/* Formulaire Fast Optimisation */}
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">
-              ⚡ Optimiseur Rapide de Prompt
-            </h2>
-            <p className="text-sm text-slate-500">
-              Réduction de taille, nettoyage Unicode, remplacement des UUID et suppression de la redondance.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Modèle</label>
-              <select
-                value={selectedModelId}
-                onChange={(e) => setSelectedModelId(e.target.value)}
-                className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800"
-              >
-                {models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} ({m.provider})
-                  </option>
-                ))}
-              </select>
+      {/* Tabs navigation */}
+      <div className="flex border-b border-slate-800 gap-6 text-sm font-medium">
+        <button
+          onClick={() => setActiveTab("optimizer")}
+          className={`pb-3 transition flex items-center gap-2 ${
+            activeTab === "optimizer"
+              ? "border-b-2 border-indigo-500 text-indigo-400 font-bold"
+              : "text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <span>⚡</span> Optimiseur de Prompt (Fast Method)
+        </button>
+        <button
+          onClick={() => setActiveTab("portfolio")}
+          className={`pb-3 transition flex items-center gap-2 ${
+            activeTab === "portfolio"
+              ? "border-b-2 border-indigo-500 text-indigo-400 font-bold"
+              : "text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <span>📊</span> Portfolio & Historique
+        </button>
+      </div>
+
+      {activeTab === "optimizer" && (
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+          {/* Main Optimizer Panel (8 cols) */}
+          <div className="lg:col-span-8 rounded-2xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl backdrop-blur-sm space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <span>🚀</span> Use Fast Optimisation Method
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Supprime le bruit, les UUIDs et les structures de prompt verbeuses
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                    Modèle cible
+                  </label>
+                  <select
+                    value={selectedModelId}
+                    onChange={(e) => setSelectedModelId(e.target.value)}
+                    className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold text-slate-200 focus:border-indigo-500 focus:outline-none"
+                  >
+                    {models.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.provider})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                    Langue
+                  </label>
+                  <select
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold text-slate-200 focus:border-indigo-500 focus:outline-none"
+                  >
+                    <option value="English">English</option>
+                    <option value="Français">Français</option>
+                    <option value="Español">Español</option>
+                  </select>
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Langue</label>
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800"
-              >
-                <option value="English">English</option>
-                <option value="Français">Français</option>
-                <option value="Español">Español</option>
-              </select>
-            </div>
-          </div>
-        </div>
 
-        {error && (
-          <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">
-            {error}
-          </div>
-        )}
+            {error && (
+              <div className="rounded-lg border border-red-500/30 bg-red-950/40 p-3 text-xs text-red-300">
+                {error}
+              </div>
+            )}
 
-        <form onSubmit={handleOptimize} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-2">
-              Prompt Brut à optimiser :
-            </label>
-            <textarea
-              required
-              rows={5}
-              value={rawPrompt}
-              onChange={(e) => setRawPrompt(e.target.value)}
-              placeholder="Can you please help me to write a summary for order 550e8400-e29b-41d4-a716-446655440000 created at 2024-03-15T14:32:45.123Z with file https://bucket.s3.amazonaws.com/uploads/doc.pdf?X-Amz-Security-Token=xyz..."
-              className="w-full rounded-lg border border-slate-300 p-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            />
+            <form onSubmit={handleOptimize} className="space-y-4">
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Prompt Brut (Input) :
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setRawPrompt(
+                        "Can you please help me to write a very detailed and comprehensive summary of customer order 550e8400-e29b-41d4-a716-446655440000 registered at 2024-03-15T14:32:45.123Z with attachment https://files.s3.amazonaws.com/orders/report_final.json?X-Amz-Signature=abc123longtoken987654321..."
+                      )
+                    }
+                    className="text-[11px] text-indigo-400 hover:text-indigo-300 underline"
+                  >
+                    Exemple de prompt lourd
+                  </button>
+                </div>
+                <textarea
+                  required
+                  rows={6}
+                  value={rawPrompt}
+                  onChange={(e) => setRawPrompt(e.target.value)}
+                  placeholder="Collez ou rédigez votre prompt ici..."
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950/80 p-3.5 font-mono text-xs text-slate-200 placeholder-slate-600 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRawPrompt("");
+                    setLastResult(null);
+                  }}
+                  className="rounded-lg border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                >
+                  Effacer
+                </button>
+                <button
+                  disabled={loading}
+                  className="rounded-lg bg-gradient-to-r from-indigo-600 to-cyan-500 px-6 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 hover:opacity-90 transition disabled:opacity-50"
+                >
+                  {loading ? "Optimisation en cours..." : "✨ Optimiser les Tokens"}
+                </button>
+              </div>
+            </form>
+
+            {/* Résultat optimisé */}
+            {lastResult && (
+              <div className="rounded-xl border border-indigo-500/30 bg-slate-950 p-5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                    <span className="font-bold text-xs uppercase tracking-wider text-emerald-400">
+                      Prompt Optimisé
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-xs font-bold text-emerald-400 border border-emerald-500/30">
+                      -{lastResult.savingsPercentage}% de Tokens
+                    </span>
+                    <button
+                      onClick={() => handleCopy(lastResult.opt_prompt)}
+                      className="rounded border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-300 hover:text-white"
+                    >
+                      {copied ? "Copié !" : "Copier"}
+                    </button>
+                  </div>
+                </div>
+
+                <pre className="whitespace-pre-wrap font-mono text-xs text-slate-200 leading-relaxed bg-slate-900/60 p-3 rounded-lg border border-slate-800">
+                  {lastResult.opt_prompt}
+                </pre>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+                  <span>Tokens avant : <strong>{lastResult.rawTokensEstimate}</strong></span>
+                  <span>Tokens après : <strong className="text-emerald-400">{lastResult.optTokensEstimate}</strong></span>
+                  <span>Économie : <strong className="text-cyan-400">+{lastResult.tokensSaved} tokens</strong></span>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Checklist d'optimisation */}
-          <div className="rounded-lg bg-slate-50 p-4 border border-slate-200">
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
-              Règles d'optimisation actives :
+          {/* Configuration Rules Panel (4 cols) */}
+          <div className="lg:col-span-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl backdrop-blur-sm space-y-4">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+              <span>⚙️</span> Techniques Actives
+            </h3>
+            <p className="text-xs text-slate-400">
+              Personnalisez les filtres appliqués lors de la compression de vos requêtes :
             </p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 text-xs text-slate-700">
-              <label className="flex items-center gap-2 cursor-pointer">
+
+            <div className="space-y-2.5 text-xs text-slate-300">
+              <label className="flex items-start gap-2.5 rounded-lg border border-slate-800 bg-slate-950/60 p-2.5 cursor-pointer hover:border-slate-700">
                 <input
                   type="checkbox"
                   checked={options.replaceUuids}
                   onChange={(e) => setOptions({ ...options, replaceUuids: e.target.checked })}
-                  className="rounded text-indigo-600"
+                  className="rounded text-indigo-600 mt-0.5"
                 />
-                UUIDs → short IDs
+                <div>
+                  <span className="font-semibold block text-slate-200">UUIDs → Short IDs</span>
+                  <span className="text-[11px] text-slate-500">Remplace les UUID 36 car. par des handles courts</span>
+                </div>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer">
+
+              <label className="flex items-start gap-2.5 rounded-lg border border-slate-800 bg-slate-950/60 p-2.5 cursor-pointer hover:border-slate-700">
                 <input
                   type="checkbox"
                   checked={options.shortenUrls}
                   onChange={(e) => setOptions({ ...options, shortenUrls: e.target.checked })}
-                  className="rounded text-indigo-600"
+                  className="rounded text-indigo-600 mt-0.5"
                 />
-                URLs longues → court
+                <div>
+                  <span className="font-semibold block text-slate-200">Raccourcir URLs S3</span>
+                  <span className="text-[11px] text-slate-500">Tronque les liens signés à leur nom utile</span>
+                </div>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer">
+
+              <label className="flex items-start gap-2.5 rounded-lg border border-slate-800 bg-slate-950/60 p-2.5 cursor-pointer hover:border-slate-700">
                 <input
                   type="checkbox"
                   checked={options.reduceTimestamps}
                   onChange={(e) => setOptions({ ...options, reduceTimestamps: e.target.checked })}
-                  className="rounded text-indigo-600"
+                  className="rounded text-indigo-600 mt-0.5"
                 />
-                Timestamps simplifiés
+                <div>
+                  <span className="font-semibold block text-slate-200">Timestamps Réduits</span>
+                  <span className="text-[11px] text-slate-500">Élimine millisecondes et formats ISO lourds</span>
+                </div>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer">
+
+              <label className="flex items-start gap-2.5 rounded-lg border border-slate-800 bg-slate-950/60 p-2.5 cursor-pointer hover:border-slate-700">
                 <input
                   type="checkbox"
                   checked={options.removeRedundancy}
                   onChange={(e) => setOptions({ ...options, removeRedundancy: e.target.checked })}
-                  className="rounded text-indigo-600"
+                  className="rounded text-indigo-600 mt-0.5"
                 />
-                Formules de politesse
+                <div>
+                  <span className="font-semibold block text-slate-200">Anti-Redondance</span>
+                  <span className="text-[11px] text-slate-500">Élimine politesse et préfixes répétés</span>
+                </div>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={options.normalizeWhitespace}
-                  onChange={(e) => setOptions({ ...options, normalizeWhitespace: e.target.checked })}
-                  className="rounded text-indigo-600"
-                />
-                Espaces superflus
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
+
+              <label className="flex items-start gap-2.5 rounded-lg border border-slate-800 bg-slate-950/60 p-2.5 cursor-pointer hover:border-slate-700">
                 <input
                   type="checkbox"
                   checked={options.cleanUnicode}
                   onChange={(e) => setOptions({ ...options, cleanUnicode: e.target.checked })}
-                  className="rounded text-indigo-600"
+                  className="rounded text-indigo-600 mt-0.5"
                 />
-                Unicode invisible & quotes
+                <div>
+                  <span className="font-semibold block text-slate-200">Nettoyage Unicode</span>
+                  <span className="text-[11px] text-slate-500">Supprime zero-width spaces et smart quotes</span>
+                </div>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer">
+
+              <label className="flex items-start gap-2.5 rounded-lg border border-slate-800 bg-slate-950/60 p-2.5 cursor-pointer hover:border-slate-700">
                 <input
                   type="checkbox"
                   checked={options.stripBase64}
                   onChange={(e) => setOptions({ ...options, stripBase64: e.target.checked })}
-                  className="rounded text-indigo-600"
+                  className="rounded text-indigo-600 mt-0.5"
                 />
-                Blobs Base64
+                <div>
+                  <span className="font-semibold block text-slate-200">Extraction Base64</span>
+                  <span className="text-[11px] text-slate-500">Retire les blocs de données brutes d'image</span>
+                </div>
               </label>
             </div>
           </div>
+        </div>
+      )}
 
-          <div className="flex justify-end">
-            <button
-              disabled={loading}
-              className="rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {loading ? "Optimisation en cours..." : "🚀 Optimiser le Prompt"}
-            </button>
-          </div>
-        </form>
-
-        {/* Résultat immédiat */}
-        {lastResult && (
-          <div className="mt-6 rounded-lg border border-indigo-200 bg-indigo-50/40 p-5 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="font-bold text-indigo-950">
-                ✨ Prompt Optimisé avec Succès !
-              </h3>
-              <div className="flex items-center gap-3">
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">
-                  -{lastResult.savingsPercentage}% de tokens
-                </span>
-                <span className="text-xs text-slate-600">
-                  {lastResult.rawTokensEstimate} tokens → <strong>{lastResult.optTokensEstimate} tokens</strong> ({lastResult.tokensSaved} économisés)
-                </span>
-              </div>
-            </div>
-            <div className="rounded-md bg-white p-4 border border-slate-200">
-              <pre className="whitespace-pre-wrap font-sans text-sm text-slate-800">
-                {lastResult.opt_prompt}
-              </pre>
+      {activeTab === "portfolio" && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl backdrop-blur-sm">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+            <div>
+              <h2 className="text-lg font-bold text-white">📊 Portfolio d'Optimisation</h2>
+              <p className="text-xs text-slate-400">
+                Suivi complet de vos gains de tokens et sessions archivées
+              </p>
             </div>
           </div>
-        )}
-      </div>
 
-      {/* Historique des Sessions */}
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h3 className="mb-4 text-lg font-bold text-slate-900">
-          📜 Historique des Sessions d'Optimisation
-        </h3>
+          {sessions.length === 0 ? (
+            <div className="p-12 text-center text-slate-500 text-sm">
+              Aucune session enregistrée pour le moment.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {sessions.map((s) => (
+                <div
+                  key={s.id}
+                  className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 transition hover:border-slate-700"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/60 pb-2.5 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-indigo-300">
+                        {s.model?.name || "Modèle Standard"}
+                      </span>
+                      <span className="text-slate-600">•</span>
+                      <span className="text-slate-400">
+                        {new Date(s.time).toLocaleDateString("fr-FR")} à{" "}
+                        {new Date(s.time).toLocaleTimeString("fr-FR")}
+                      </span>
+                    </div>
 
-        {sessions.length === 0 ? (
-          <p className="text-sm text-slate-500">Aucune session d'optimisation pour le moment.</p>
-        ) : (
-          <div className="space-y-4">
-            {sessions.map((s) => (
-              <div
-                key={s.id}
-                className="rounded-lg border border-slate-200 p-4 transition-all hover:border-slate-300"
-              >
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-800">
-                      Modèle : {s.model?.name || "Standard"}
+                    <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-bold text-emerald-400 border border-emerald-500/20">
+                      +{s.tokensSaved} tokens économisés
                     </span>
-                    <span>•</span>
-                    <span>{new Date(s.time).toLocaleDateString("fr-FR")} à {new Date(s.time).toLocaleTimeString("fr-FR")}</span>
                   </div>
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 font-bold text-emerald-700 border border-emerald-200">
-                    +{s.tokensSaved} tokens sauvés
-                  </span>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                  <div className="rounded bg-slate-50 p-2.5 text-xs text-slate-600 border border-slate-100">
-                    <span className="font-semibold text-slate-500 block mb-1">Prompt Original :</span>
-                    <p className="line-clamp-3">{s.raw_prompt}</p>
-                  </div>
-                  <div className="rounded bg-indigo-50/50 p-2.5 text-xs text-slate-800 border border-indigo-100">
-                    <span className="font-semibold text-indigo-600 block mb-1">Prompt Optimisé :</span>
-                    <p className="line-clamp-3 font-medium">{s.opt_prompt}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 text-xs">
+                    <div className="rounded-lg bg-slate-900/80 p-3 border border-slate-800/80">
+                      <span className="font-bold text-slate-500 block mb-1">
+                        Prompt Brut :
+                      </span>
+                      <p className="font-mono text-slate-400 whitespace-pre-wrap line-clamp-3">
+                        {s.raw_prompt}
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg bg-indigo-950/30 p-3 border border-indigo-500/20">
+                      <span className="font-bold text-indigo-400 block mb-1">
+                        Prompt Optimisé :
+                      </span>
+                      <p className="font-mono text-emerald-200 whitespace-pre-wrap line-clamp-3">
+                        {s.opt_prompt}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

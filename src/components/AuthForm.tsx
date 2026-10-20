@@ -36,33 +36,61 @@ export default function AuthForm({
     router.refresh();
   }
 
-  const cls = "w-full rounded border border-slate-300 bg-white p-2";
+  const inputCls =
+    "w-full rounded-lg border border-slate-700 bg-slate-950/70 p-3 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
 
   return (
-    <form onSubmit={onSubmit} className="flex w-full max-w-sm flex-col gap-3">
+    <form onSubmit={onSubmit} className="flex w-full flex-col gap-4">
       {mode === "register" && (
-        <input name="name" placeholder="Nom" required className={cls} />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Prénom</label>
+            <input name="name" placeholder="John" required className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1">Nom</label>
+            <input name="surname" placeholder="Doe" required className={inputCls} />
+          </div>
+        </div>
       )}
-      <input
-        name="email"
-        type="email"
-        placeholder="Email"
-        required
-        className={cls}
-      />
-      <input
-        name="password"
-        type="password"
-        placeholder="Mot de passe"
-        required
-        className={cls}
-      />
-      {error && <p className="text-sm text-red-600">{error}</p>}
+
+      <div>
+        <label className="block text-xs font-medium text-slate-400 mb-1">Adresse Email</label>
+        <input
+          name="email"
+          type="email"
+          placeholder="nom@exemple.com"
+          required
+          className={inputCls}
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-slate-400 mb-1">Mot de passe</label>
+        <input
+          name="password"
+          type="password"
+          placeholder="••••••••"
+          required
+          className={inputCls}
+        />
+      </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-500/30 bg-red-950/40 p-3 text-xs text-red-300">
+          {error}
+        </div>
+      )}
+
       <button
         disabled={loading}
-        className="rounded bg-slate-900 px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-2 w-full rounded-lg bg-gradient-to-r from-indigo-600 to-cyan-500 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 hover:opacity-90 transition disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {loading ? "Patientez..." : mode === "login" ? "Se connecter" : "S'inscrire"}
+        {loading
+          ? "Traitement..."
+          : mode === "login"
+          ? "Se Connecter"
+          : "Créer mon Compte"}
       </button>
     </form>
   );

@@ -68,7 +68,29 @@ export async function POST(req: Request) {
     removeRedundancy,
   });
 
-  // Sauvegarder la session en base
+  // Vérifier le quota si c'est un utilisateur standard
+  if (!session.isAdmin) {
+    const userRecord = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { id: true, tokenQuota: true, tokensUsed: true },
+    });
+
+    if (!userRecord) {
+      return NextResponse.json({ error: "Utilisateur introuvable" }, { status: 404 });
+    }
+
+    const tokensCost = result.optTokensEstimate || 1;
+    if (userRecord.tokenQuota > 0 && userRecord.tokensUsed + tokensCost > userRecord.tokenQuota) {
+      return NextResponse.json(
+        {
+          error: `Quota de tokens dépassé (${userRecord.tokensUsed} / ${userRecord.tokenQuota}). Contactez l'administrateur.`,
+        },
+        { status: 403 }
+      );
+    }
+  }
+
+  // Sauvegarder la session en base (prise en compte admin vs user)
   const createdSession = await prisma.session.create({
     data: {
       raw_prompt: result.raw_prompt,
@@ -76,20 +98,31 @@ export async function POST(req: Request) {
       language,
       tokensSaved: result.tokensSaved,
       modelId: model.id,
-      userId: session.userId,
+      userId: session.isAdmin ? null : session.userId,
+      adminId: session.isAdmin ? session.userId : null,
     },
     include: {
       model: true,
+      user: {
+        select: { id: true, name: true, surname: true, email: true },
+      },
+      admin: {
+        select: { id: true, name: true, surname: true, email: true },
+      },
     },
   });
 
-  // Incrémenter totalPrompts de l'utilisateur
-  await prisma.user.update({
-    where: { id: session.userId },
-    data: {
-      totalPrompts: { increment: 1 },
-    },
-  }).catch(() => null);
+  // Si c'est un utilisateur standard, incrémenter totalPrompts et tokensUsed
+  if (!session.isAdmin) {
+    const tokensCost = result.optTokensEstimate || 1;
+    await prisma.user.update({
+      where: { id: session.userId },
+      data: {
+        totalPrompts: { increment: 1 },
+        tokensUsed: { increment: tokensCost },
+      },
+    }).catch(() => null);
+  }
 
   return NextResponse.json({
     session: createdSession,

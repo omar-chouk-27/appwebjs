@@ -1,42 +1,66 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/session";
 import { NextResponse } from "next/server";
-import z from "zod"
-
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin();  // ← await
-  if (!admin)
-    return NextResponse.json({ error: "Admin login required" }, { status: 401 }); // ← 401 not 404
+  const admin = await requireAdmin();
+  if (!admin) {
+    return NextResponse.json({ error: "Connexion administrateur requise" }, { status: 401 });
+  }
 
-      const { id } = await params;
-if (!id)
-    return NextResponse.json({ error: "id is required" }, { status: 400 });
+  const { id } = await params;
+  if (!id) {
+    return NextResponse.json({ error: "L'identifiant est requis" }, { status: 400 });
+  }
 
-  const sessions = await prisma.session.findFirst({ where: { id } });
+  const session = await prisma.session.findUnique({
+    where: { id },
+    include: {
+      model: true,
+      user: {
+        select: {
+          id: true,
+          name: true,
+          surname: true,
+          email: true,
+          role: true,
+          tokenQuota: true,
+          tokensUsed: true,
+        },
+      },
+      admin: {
+        select: {
+          id: true,
+          name: true,
+          surname: true,
+          email: true,
+        },
+      },
+    },
+  });
 
-  if (!sessions)
-    return NextResponse.json({ error: "session not found" }, { status: 404 });
+  if (!session) {
+    return NextResponse.json({ error: "Session introuvable" }, { status: 404 });
+  }
 
-  return NextResponse.json({ sessions }, { status: 200 });
+  return NextResponse.json(session, { status: 200 });
 }
 
-
-
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin();  // ← await
-  if (!admin)
-    return NextResponse.json({ error: "Admin login required" }, { status: 401 }); // ← 401 not 404
+  const admin = await requireAdmin();
+  if (!admin) {
+    return NextResponse.json({ error: "Connexion administrateur requise" }, { status: 401 });
+  }
 
-   const { id } = await params;
-
-  if (!id)
-    return NextResponse.json({ error: "id is required" }, { status: 400 });
+  const { id } = await params;
+  if (!id) {
+    return NextResponse.json({ error: "L'identifiant est requis" }, { status: 400 });
+  }
 
   try {
     await prisma.session.delete({ where: { id } });
-    return NextResponse.json({ message: "session deleted" }, { status: 200 });
+    return NextResponse.json({ message: "Session supprimée avec succès" }, { status: 200 });
   } catch {
-    return NextResponse.json({ error: "session not found" }, { status: 404 });
+    return NextResponse.json({ error: "Session introuvable" }, { status: 404 });
   }
 }

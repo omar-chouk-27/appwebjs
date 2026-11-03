@@ -1,27 +1,42 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { z } from "zod";
 import { requireAdmin } from "@/lib/session";
 
-
-const schema = z.object({
-  name:     z.string().trim().min(2),
-  surname:  z.string().trim().min(2),
-  email:    z.string().trim().toLowerCase().email(),
-  password: z.string().min(8),
-
-});
-
 export async function GET(req: Request) {
-  const admin = await requireAdmin();  // ← await
-  if (!admin)
-    return NextResponse.json({ error: "Admin login required" }, { status: 401 }); // ← 401 not 404
+  const admin = await requireAdmin();
+  if (!admin) {
+    return NextResponse.json({ error: "Connexion administrateur requise" }, { status: 401 });
+  }
 
-  const session = await prisma.session.findMany();
+  const { searchParams } = new URL(req.url);
+  const userId = searchParams.get("userId");
 
-  if (!session)
-    return NextResponse.json({ error: "session not found" }, { status: 404 });
+  const sessions = await prisma.session.findMany({
+    where: userId ? { userId } : undefined,
+    include: {
+      model: true,
+      user: {
+        select: {
+          id: true,
+          name: true,
+          surname: true,
+          email: true,
+          role: true,
+          tokenQuota: true,
+          tokensUsed: true,
+        },
+      },
+      admin: {
+        select: {
+          id: true,
+          name: true,
+          surname: true,
+          email: true,
+        },
+      },
+    },
+    orderBy: { time: "desc" },
+  });
 
-  return NextResponse.json(session);
+  return NextResponse.json(sessions);
 }
